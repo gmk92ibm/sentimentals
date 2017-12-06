@@ -1,13 +1,34 @@
 var express = require("express");
 var app = express();
-var cfenv = require("cfenv");
 var bodyParser = require('body-parser')
+var analyzer = require("./analyzer");
+var config = require('./config');
 
 // parse application/x-www-form-urlencoded
 app.use(bodyParser.urlencoded({ extended: false }))
 
 // parse application/json
 app.use(bodyParser.json())
+
+if (config.services['cloudantNoSQLDB']) {
+    // Load the Cloudant library.
+    var Cloudant = require('cloudant');
+
+    // Initialize database with credentials
+    var cloudant = Cloudant(config.services['cloudantNoSQLDB'][0].credentials);
+
+    //database name
+    var dbName = 'mydb';
+
+    // Create a new "mydb" database.
+    cloudant.db.create(dbName, function (err, data) {
+        if (!err) //err if database doesn't already exists
+            console.log("Created database: " + dbName);
+    });
+
+    // Specify the database we are going to use (mydb)...
+    mydb = cloudant.db.use(dbName);
+}
 
 var mydb;
 
@@ -18,19 +39,19 @@ var mydb;
 * }
 */
 app.post("/api/visitors", function (request, response) {
-  var userName = request.body.name;
-  if(!mydb) {
-    console.log("No database.");
-    response.send("Hello " + userName + "!");
-    return;
-  }
-  // insert the username as a document
-  mydb.insert({ "name" : userName }, function(err, body, header) {
-    if (err) {
-      return console.log('[mydb.insert] ', err.message);
+    var userName = request.body.name;
+    if (!mydb) {
+        console.log("No database.");
+        response.send("Hello " + userName + "!");
+        return;
     }
-    response.send("Hello " + userName + "! I added you to the database.");
-  });
+    // insert the username as a document
+    mydb.insert({ "name": userName }, function (err, body, header) {
+        if (err) {
+            return console.log('[mydb.insert] ', err.message);
+        }
+        response.send("Hello " + userName + "! I added you to the database.");
+    });
 });
 
 /**
@@ -45,90 +66,46 @@ app.post("/api/visitors", function (request, response) {
  * @return An array of all the visitor names
  */
 app.get("/api/visitors", function (request, response) {
-  var names = [];
-  if(!mydb) {
-    response.json(names);
-    return;
-  }
-
-  mydb.list({ include_docs: true }, function(err, body) {
-    if (!err) {
-      body.rows.forEach(function(row) {
-        if(row.doc.name)
-          names.push(row.doc.name);
-      });
-      response.json(names);
+    var names = [];
+    if (!mydb) {
+        response.json(names);
+        return;
     }
-  });
+
+    mydb.list({ include_docs: true }, function (err, body) {
+        if (!err) {
+            body.rows.forEach(function (row) {
+                if (row.doc.name)
+                    names.push(row.doc.name);
+            });
+            response.json(names);
+        }
+    });
 });
 
-
-// load local VCAP configuration  and service credentials
-var vcapLocal;
-try {
-  vcapLocal = require('./vcap-local.json');
-  console.log("Loaded local VCAP", vcapLocal);
-} catch (e) { }
-
-const appEnvOpts = vcapLocal ? { vcap: vcapLocal} : {}
-
-const appEnv = cfenv.getAppEnv(appEnvOpts);
-
-if (appEnv.services['cloudantNoSQLDB']) {
-  // Load the Cloudant library.
-  var Cloudant = require('cloudant');
-
-  // Initialize database with credentials
-  var cloudant = Cloudant(appEnv.services['cloudantNoSQLDB'][0].credentials);
-
-  //database name
-  var dbName = 'mydb';
-
-  // Create a new "mydb" database.
-  cloudant.db.create(dbName, function(err, data) {
-    if(!err) //err if database doesn't already exists
-      console.log("Created database: " + dbName);
-  });
-
-  // Specify the database we are going to use (mydb)...
-  mydb = cloudant.db.use(dbName);
-}
-
-//GMK START
-
-var tone_analyzer;
-
-if(appEnv.services['tone_analyzer'])
-{
-  console.log('found service tone_analyzer');
-
-  var ToneAnalyzerV3 = require('watson-developer-cloud/tone-analyzer/v3');
-
-  var credentials = appEnv.services['tone_analyzer'][0].credentials;
-
-  credentials['version_date'] = '2016-05-19';
-
-  tone_analyzer = new ToneAnalyzerV3(credentials)
-
-  var params = {text: require('./tone.json').text, tones: 'emotion'};  
-
-  tone_analyzer.tone(params, function(error, response) {
-  if (error)
-    console.log('error:', error);
-  else
-    console.log(JSON.stringify(response, null, 2));
-  }
-  );
-}
-
-//GMK STOP
+/**
+ * Endpoint to analyze text
+ * POST localhost:3000/api/analyze
+ * {
+ * 	"text": "some text"
+ * }
+ * 
+ * Response:
+ * {
+ * "document_tone": {},
+ * "sentences_tone": [{}]
+ * }
+ * @return JSON analysis of text
+ */
+app.post("/api/analyze", function(request, response) {
+    var text = request.body.text;
+    analyzer.analyze(request.body, response);;
+});
 
 //serve static file (index.html, images, css)
 app.use(express.static(__dirname + '/views'));
 
-
-
 var port = process.env.PORT || 3000
-app.listen(port, function() {
+app.listen(port, function () {
     console.log("To view your app, open this link in your browser: http://localhost:" + port);
 });
