@@ -86,6 +86,8 @@ app.get("/api/visitors", function (request, response) {
 /**
  * Endpoint to analyze text
  * POST localhost:3000/api/analyze
+ * request body should look like this:
+ * 
  * {
  * 	"text": "some text"
  * }
@@ -98,7 +100,6 @@ app.get("/api/visitors", function (request, response) {
  * @return JSON analysis of text
  */
 app.post("/api/analyze", function(request, response) {
-    var text = request.body.text;
     analyzer.analyze(request.body, response);;
 });
 
