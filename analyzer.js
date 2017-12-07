@@ -14,7 +14,10 @@ if (config.services['tone_analyzer']) {
 module.exports = {
 	analyze: function (params, response) {
 		tone_analyzer.tone(params, function (error, res) {
-            response.send(JSON.stringify(res, null, 2));
+            if (error) 
+                response.send(error);
+            else 
+                response.send(JSON.stringify(res, null, 2));
 		});
 	}
 }
