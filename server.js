@@ -84,18 +84,31 @@ app.get("/api/visitors", function (request, response) {
 });
 
 /**
- * Endpoint to analyze text
+ * Endpoint to compare text
  * POST localhost:3000/api/analyze
+ * 
  * request body should look like this:
  * 
  * {
- * 	"text": "some text"
+ *      "profile_docs" : [
+ *          {
+ *              "text": "This is example profile text."
+ *          },
+ *          {
+ *              "text": "This is some more example profile text."
+ *          },
+ *      ],
+ *      "compare_doc" : {
+ *          "text": "This is example comparison text."
+ *      },
+ *      "comparison_level": "document"
  * }
  * 
- * Response:
+ * comparison_level can be either "document" or "sentence"
+ * 
+ * Response: (not implemented)
  * {
- * "document_tone": {},
- * "sentences_tone": [{}]
+ *  
  * }
  * @return JSON analysis of text
  */

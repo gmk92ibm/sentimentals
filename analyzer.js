@@ -11,13 +11,52 @@ if (config.services['tone_analyzer']) {
 	tone_analyzer = new ToneAnalyzerV3(credentials)
 }
 
+function compareDocumentLevel(profileRes, compareRes) {
+    return "compare document level";
+}
+
+function compareSentenceLevel(profileRes, compareRes) {
+    return "compare sentence level";
+}
+
 module.exports = {
 	analyze: function (params, response) {
-		tone_analyzer.tone(params, function (error, res) {
+        // response.send(params);
+        var concatenatedProfileDoc = '';
+        for (i in params["profile_docs"]) {
+            concatenatedProfileDoc += params["profile_docs"][i]["text"];
+            concatenatedProfileDoc += " ";
+        }
+        var profileParams = {};
+        profileParams.text = concatenatedProfileDoc;
+
+        var compareParams = {};
+        compareParams.text = params["compare_doc"]["text"];
+
+        var profileRes = {};
+        var compareRes = {};
+		tone_analyzer.tone(profileParams, function (error, res) {
             if (error) 
                 response.send(error);
-            else 
-                response.send(JSON.stringify(res, null, 2));
+            else {
+                profileRes = res;
+                tone_analyzer.tone(compareParams, function(error, res) {
+                    if (error) 
+                        response.send(error);
+                    else {
+                        compareRes = res;
+                        if (params["compare_level"] === 'sentence') {
+                            response.send(compareSentenceLevel(profileRes, compareRes));
+                        } else if (params["compare_level"] === 'document') {
+                            response.send(compareDocumentLevel(profileRes, compareRes));
+                        } else {
+                            response.send({
+                                "error" : "Unsupported compare_level provided"
+                            })
+                        }
+                    }
+                });
+            }
 		});
 	}
 }
