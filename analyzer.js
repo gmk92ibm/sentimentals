@@ -11,48 +11,95 @@ if (config.services['tone_analyzer']) {
 	tone_analyzer = new ToneAnalyzerV3(credentials)
 }
 
-function compareDocumentLevel(profileRes, compareRes) {
-    return "compare document level";
+function sortByAbsoluteValueDescending(a, b) {
+    if (Math.abs(a.difference) < Math.abs(b.difference)) {
+        return 1;
+    }
+    if (Math.abs(a.difference) > Math.abs(b.difference)) {
+        return -1;
+    }
+    return 0;
 }
 
-function compareSentenceLevel(profileRes, compareRes) {
-    return "compare sentence level";
+function compareDocumentLevel(profile_analysis, new_analysis) {
+    var raw_comparison = new_analysis.document_tone.tone_categories; //this sets the base structure for our response
+    //Iterate over the categories (emotion, language, social)
+    for (i in new_analysis.document_tone.tone_categories) {
+        var new_category = new_analysis.document_tone.tone_categories[i];
+        var profile_category = profile_analysis.document_tone.tone_categories[i];
+        // Iterate over tones of each category
+        for (j in new_category.tones) {
+            var new_tone = new_category.tones[j];
+            var profile_tone = profile_category.tones[j];
+            raw_comparison[i].tones[j].difference = profile_tone.score - new_tone.score;
+            delete raw_comparison[i].tones[j].score; //removing unnecessary score property
+        }
+    }
+
+    var ordered_comparison = [];
+    for (i in raw_comparison) {
+        for (j in raw_comparison[i].tones) {
+            var obj = {
+                "category_id" : raw_comparison[i].category_id,
+                "tone_id": raw_comparison[i].tones[j].tone_id,
+                "difference": raw_comparison[i].tones[j].difference
+            };
+            ordered_comparison.push(obj);
+        }
+    }
+    ordered_comparison.sort(sortByAbsoluteValueDescending);
+
+    var summary = {};
+    summary.ordered_comparison = ordered_comparison;
+    summary.raw_comparison = raw_comparison;
+    return summary;
+}
+
+function compareSentenceLevel(profile_analysis, new_analysis) {
+    return "Not implemented yet";
 }
 
 module.exports = {
-	analyze: function (params, response) {
-        // response.send(params);
-        var concatenatedProfileDoc = '';
-        for (i in params["profile_docs"]) {
-            concatenatedProfileDoc += params["profile_docs"][i]["text"];
-            concatenatedProfileDoc += " ";
+	analyze: function (request_body, response) {
+        if (!request_body.combine_profile_docs) {
+            response.send({
+                "error" : "Not implemented yet (combine_profile_docs set to false)"
+            });
+            return;
+        } else {
+            var combined_profile_doc = '';
+            for (i in request_body.profile_docs) {
+                combined_profile_doc += request_body.profile_docs[i].text;
+                combined_profile_doc += " ";
+            }
+            var profile_params = {};
+            profile_params.text = combined_profile_doc;
         }
-        var profileParams = {};
-        profileParams.text = concatenatedProfileDoc;
 
-        var compareParams = {};
-        compareParams.text = params["compare_doc"]["text"];
+        var new_params = {};
+        new_params.text = request_body.new_doc.text;
 
-        var profileRes = {};
-        var compareRes = {};
-		tone_analyzer.tone(profileParams, function (error, res) {
+        var profile_analysis = {};
+        var new_analysis = {};
+		tone_analyzer.tone(profile_params, function (error, res) {
             if (error) 
                 response.send(error);
             else {
-                profileRes = res;
-                tone_analyzer.tone(compareParams, function(error, res) {
+                profile_analysis = res;
+                tone_analyzer.tone(new_params, function(error, res) {
                     if (error) 
                         response.send(error);
                     else {
-                        compareRes = res;
-                        if (params["compare_level"] === 'sentence') {
-                            response.send(compareSentenceLevel(profileRes, compareRes));
-                        } else if (params["compare_level"] === 'document') {
-                            response.send(compareDocumentLevel(profileRes, compareRes));
+                        new_analysis = res;
+                        if (request_body.comparison_level === 'sentence') {
+                            response.send(compareSentenceLevel(profile_analysis, new_analysis));
+                        } else if (request_body.comparison_level === 'document') {
+                            response.send(compareDocumentLevel(profile_analysis, new_analysis));
                         } else {
                             response.send({
                                 "error" : "Unsupported compare_level provided"
-                            })
+                            });
+                            return;
                         }
                     }
                 });
