@@ -88,11 +88,12 @@ app.get("/api/visitors", function (request, response) {
  * POST localhost:3000/api/analyze
  * 
  * ####### REQUEST BODY ####### 
- * profile_docs - array of objects thatcontains a list of old text to compare against
+ * profile_docs - array of objects that contains a list of old text to compare against
  * new_doc - single object that contains the new text to compare
  * comparison_level - can be either "document" or "sentence"
  * combine_profile_docs - true/false. this indicates whether the profile documents should be concatenated into one big 
  *      document or handled separately. This is probably just for testing.
+ * tone_categories - an array of the included tone_categories: "emotion_tone", "languages_tone", "social_tone"
  * 
  * example: 
  * {
@@ -108,7 +109,8 @@ app.get("/api/visitors", function (request, response) {
  *     	  "text": "I am extremely happy."
  *     },
  *     "comparison_level": "document",
- *     "combine_profile_docs": true
+ *     "combine_profile_docs": true,
+ *     "tone_categories": ["emotion_tone", "languages_tone", "social_tone"]
  * }
  * 
  * ####### RESPONSE #######

@@ -21,28 +21,32 @@ function sortByAbsoluteValueDescending(a, b) {
     return 0;
 }
 
-function compareDocumentLevel(profile_analysis, new_analysis) {
-    var raw_comparison = new_analysis.document_tone.tone_categories; //this sets the base structure for our response
-    //Iterate over the categories (emotion, language, social)
-    for (i in new_analysis.document_tone.tone_categories) {
-        var new_category = new_analysis.document_tone.tone_categories[i];
-        var profile_category = profile_analysis.document_tone.tone_categories[i];
-        // Iterate over tones of each category
-        for (j in new_category.tones) {
-            var new_tone = new_category.tones[j];
-            var profile_tone = profile_category.tones[j];
-            raw_comparison[i].tones[j].difference = profile_tone.score - new_tone.score;
-            delete raw_comparison[i].tones[j].score; //removing unnecessary score property
-        }
-    }
-
+function compareDocumentLevel(profile_analysis, new_analysis, tone_categories) {
+    var raw_comparison = new_analysis.document_tone.tone_categories; //this sets the base structure for our raw response
     var ordered_comparison = [];
-    for (i in raw_comparison) {
-        for (j in raw_comparison[i].tones) {
+    var difference_sum = 0;
+    //Iterate over the categories (emotion, language, social)
+    for (c in raw_comparison) {
+        var new_category = raw_comparison[c];
+        //check if the category should be ignored
+        //this currently results in null values in the returned array rather than 
+        //  changing the size of the array. could be fixed by array.splice and iterating backwards
+        if (!tone_categories.includes(new_category.category_id)) {
+            delete raw_comparison[c];
+            break;
+        }
+        var profile_category = profile_analysis.document_tone.tone_categories[c];
+        // Iterate over tones of each category
+        for (t in new_category.tones) {
+            var new_tone = new_category.tones[t];
+            var profile_tone = profile_category.tones[t];
+            new_tone.difference = profile_tone.score - new_tone.score;
+            difference_sum += Math.abs(new_tone.difference);
+            delete new_tone.score; //removing unnecessary score property
             var obj = {
-                "category_id" : raw_comparison[i].category_id,
-                "tone_id": raw_comparison[i].tones[j].tone_id,
-                "difference": raw_comparison[i].tones[j].difference
+                "category_id" : new_category.category_id,
+                "tone_id": new_tone.tone_id,
+                "difference": new_tone.difference
             };
             ordered_comparison.push(obj);
         }
@@ -50,13 +54,45 @@ function compareDocumentLevel(profile_analysis, new_analysis) {
     ordered_comparison.sort(sortByAbsoluteValueDescending);
 
     var summary = {};
+    summary.difference_sum = difference_sum;
     summary.ordered_comparison = ordered_comparison;
     summary.raw_comparison = raw_comparison;
     return summary;
 }
 
-function compareSentenceLevel(profile_analysis, new_analysis) {
-    return "Not implemented yet";
+function compareSentenceLevel(profile_analysis, new_analysis, tone_categories) {
+    if (!new_analysis.sentences_tone) {
+        return {
+            "error" : "New content does not contain multiple sentences. Sentence level comparison cannot be made."
+        }
+    }
+    var raw_comparison = new_analysis.sentences_tone; //sets the base structure for our response
+    //Iterate over the new content sentences analysis
+    for (s in raw_comparison) {
+        var new_sentence = raw_comparison[s];
+        new_sentence.difference_sum = 0;
+        //Iterate over the categories (emotion, language, social)
+        for (c in new_sentence.tone_categories) {
+            var new_sentence_category = new_sentence.tone_categories[c];
+            var profile_category = profile_analysis.document_tone.tone_categories[c];
+            // Iterate over tones of each category
+            for (t in new_sentence_category.tones) {
+                var new_sentence_tone = new_sentence_category.tones[t];
+                var profile_tone = profile_category.tones[t];
+                new_sentence_tone.difference = profile_tone.score - new_sentence_tone.score;
+                new_sentence.difference_sum += Math.abs(new_sentence_tone.difference);
+                delete new_sentence_tone.score; //removing unnecessary score property
+            }
+        }
+    }
+
+    var summary = {};
+    summary.raw_comparison = raw_comparison;
+    summary.original = {
+        "new": new_analysis,
+        "profile": profile_analysis
+    };
+    return summary;
 }
 
 module.exports = {
@@ -92,14 +128,13 @@ module.exports = {
                     else {
                         new_analysis = res;
                         if (request_body.comparison_level === 'sentence') {
-                            response.send(compareSentenceLevel(profile_analysis, new_analysis));
+                            response.send(compareSentenceLevel(profile_analysis, new_analysis, request_body.tone_categories));
                         } else if (request_body.comparison_level === 'document') {
-                            response.send(compareDocumentLevel(profile_analysis, new_analysis));
+                            response.send(compareDocumentLevel(profile_analysis, new_analysis, request_body.tone_categories));
                         } else {
                             response.send({
                                 "error" : "Unsupported compare_level provided"
                             });
-                            return;
                         }
                     }
                 });
