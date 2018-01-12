@@ -95,50 +95,168 @@ function compareSentenceLevel(profile_analysis, new_analysis, tone_categories) {
     return summary;
 }
 
-module.exports = {
-	analyze: function (request_body, response) {
-        if (!request_body.combine_profile_docs) {
-            response.send({
-                "error" : "Not implemented yet (combine_profile_docs set to false)"
-            });
-            return;
-        } else {
-            var combined_profile_doc = '';
-            for (i in request_body.profile_docs) {
-                combined_profile_doc += request_body.profile_docs[i].text;
-                combined_profile_doc += " ";
+function combineResultValues(combined_analysis, new_analysis) { 
+    if(combined_analysis == null || combined_analysis == new_analysis) {
+        return new_analysis;
+    }
+    var doc_doc = combined_analysis.document_tone; 
+    
+    for(i in doc_doc.tone_categories) {
+        var doc_cat = doc_doc.tone_categories[i];
+        for(j in doc_cat.tones) {
+            var doc_tone = doc_cat.tones[j];
+
+            var new_doc = new_analysis.document_tone; 
+            for(k in new_doc.tone_categories) {
+                var new_cat = new_doc.tone_categories[k];
+                for(l in new_cat.tones) { 
+                    var new_tone = new_cat.tones[l];
+                    if(doc_tone.tone_id == new_tone.tone_id) {
+                        doc_tone.score += new_tone.score
+                    }
+                }
             }
-            var profile_params = {};
-            profile_params.text = combined_profile_doc;
         }
+    }
+    
+    var new_sec = new_analysis.sentences_tone;
+    if(combined_analysis.sentences_tone == null) {
+        combined_analysis.sentences_tone = {};
+    }
+    for(i in new_sec) {
+        var new_tone = new_sec[i];
+        combined_analysis.sentences_tone.push(new_tone)
+    }
+    return combined_analysis;
+}
 
-        var new_params = {};
-        new_params.text = request_body.new_doc.text;
+function averageScores(combined_analysis, count) {
+    var doc_doc = combined_analysis.document_tone; 
 
-        var profile_analysis = {};
-        var new_analysis = {};
-		tone_analyzer.tone(profile_params, function (error, res) {
+    for(i in doc_doc.tone_categories) {
+        var doc_cat = doc_doc.tone_categories[i];
+        for(j in doc_cat.tones) {
+            var doc_tone = doc_cat.tones[j];
+
+            doc_tone.score = doc_tone.score / count;
+        }
+    }
+    return  combined_analysis
+}
+
+function toneAnalyzeNotCombinedProfile(request_body) {
+    var profile_params = {};
+    profile_params.text = request_body.profile_docs[0].text;
+    var count = 0;
+    var combinedResponse
+
+    for(i in request_body.profile_docs) {
+        tone_analyzer.tone(profile_params, function(error, res) {
             if (error) 
                 response.send(error);
             else {
-                profile_analysis = res;
+                combinedResponse = combineResultValues(combinedResponse, res);
+                count += 1;
+                if(count == request_body.profile_docs.length) {
+                    return combinedResponse
+                }
+            }
+        });
+    }
+}
+
+module.exports = {
+	analyze: function (request_body, response) {
+        var new_params = {};
+        new_params.text = request_body.new_doc.text;
+        var profile_params = {};    
+
+        if (!request_body.combine_profile_docs) {
+            profile_params.text = request_body.profile_docs[0].text;
+            var count = 0;
+            var combinedResponse // needs to be null for default value
+            var promises = [];
+
+            for(i in request_body.profile_docs) {
+                promises.push(new Promise((resolve, reject) => {
+                    tone_analyzer.tone(profile_params, function(error, res) {
+                        if (error) 
+                            reject(error);
+                        else {
+                            resolve(res);
+                        }
+                    });
+                }))
+            }
+
+            Promise.all(promises).then(values => {
+                for(i in values) {
+                    combinedResponse = combineResultValues(combinedResponse, values[i]);
+                }
+
+                var avg = averageScores(combinedResponse, request_body.profile_docs.length);
+
                 tone_analyzer.tone(new_params, function(error, res) {
-                    if (error) 
+                    if (error)  {
                         response.send(error);
+                    }
                     else {
-                        new_analysis = res;
+                        // pass in analyzed profile and new_doc text to comparison
                         if (request_body.comparison_level === 'sentence') {
-                            response.send(compareSentenceLevel(profile_analysis, new_analysis, request_body.tone_categories));
+                            response.send(compareSentenceLevel(avg, res, request_body.tone_categories));
                         } else if (request_body.comparison_level === 'document') {
-                            response.send(compareDocumentLevel(profile_analysis, new_analysis, request_body.tone_categories));
-                        } else {
+                            response.send(compareDocumentLevel(avg, res, request_body.tone_categories));
+                        }
+                        else {
                             response.send({
                                 "error" : "Unsupported compare_level provided"
                             });
                         }
                     }
                 });
+            }).catch((error) => {
+                console.log(error);
+            });
+        } else {
+            var combined_profile_doc = '';
+            for (i in request_body.profile_docs) {
+                combined_profile_doc += request_body.profile_docs[i].text;
+                combined_profile_doc += " ";
             }
-		});
+           
+            profile_params.text = combined_profile_doc;
+
+            var profile_analysis = {};
+            var new_analysis = {};
+            // analyze profile text
+            tone_analyzer.tone(profile_params, function (error, res) {
+                if (error) 
+                    response.send(error);
+                else {
+                    profile_analysis = res;
+                    // analyze new doc text
+                    tone_analyzer.tone(new_params, function(error, res) {
+                        if (error) 
+                            response.send(error);
+                        else {
+                            new_analysis = res;
+                            // pass in analyzed profile and new_doc text to comparison
+                            if (request_body.comparison_level === 'sentence') {
+                                response.send(compareSentenceLevel(profile_analysis, new_analysis, request_body.tone_categories));
+                            } else if (request_body.comparison_level === 'document') {
+                                response.send(compareDocumentLevel(profile_analysis, new_analysis, request_body.tone_categories));
+                            }
+                            else {
+                                response.send({
+                                    "error" : "Unsupported compare_level provided"
+                                });
+                            }
+                        }
+                    });
+                }
+            });
+        }
+
+        
 	}
 }
