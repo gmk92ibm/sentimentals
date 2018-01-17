@@ -166,8 +166,20 @@ module.exports = {
         var combinedResponse = reduce(profile_doc_values, (result, value) => combineResultValues(result, value));
         var profile_analysis = averageScores(combinedResponse, request_body.profile_docs.length);
 
-        var comparisonFunc = request_body.comparison_level === 'sentence' ? compareSentenceLevel : compareDocumentLevel;
-        response.send(comparisonFunc(profile_analysis, new_analysis, request_body.tone_categories));
+        profile = parse_response(profile_analysis)
+
+        compare = parse_response(new_analysis)
+
+        sentence_analysis = analyze_sentences(profile,new_analysis) // have to use new_analysis as it still has sentences
+
+        var summary = {}
+
+        summary.sentences = sentence_analysis.sentences
+        summary.sentence_averages = sentence_analysis.sentence_averages
+        summary.document = compute_diff(profile,compare)
+        summary.document_average = average_scores([compute_diff(profile,compare)])[0]
+
+        response.send(summary);
       }).catch((error) => {
         response.send(error);
       });
@@ -192,4 +204,99 @@ module.exports = {
       });
     }
   }
+}
+
+
+function analyze_sentences(profile, response){
+  var sentences = []
+
+  sentences_tone = response['sentences_tone']
+
+  if(!sentences_tone) return {}
+
+  for(i = 0; i < sentences_tone.length; i++){
+    tone_categories = sentences_tone[i]['tone_categories']
+
+    tmp = {}
+
+    for(j = 0; j < tone_categories.length; j++){
+      tones = tone_categories[j]['tones']
+      category_id = tone_categories[j]['category_id']
+
+      for(k = 0; k < tones.length; k++){
+        tone_id = tones[k]['tone_id']
+        score = tones[k]['score'];
+
+        tmp[tone_id] = score
+      }
+
+      sentences[i] = compute_diff(profile,tmp)
+    }
+  }
+
+  var summary = {}
+
+  summary.sentences = sentences
+  summary.sentence_averages = average_scores(sentences)
+
+  return summary
+}
+
+function parse_response(response){
+  var dictionary = {}
+
+  document_tone = response['document_tone']
+  tone_categories = document_tone['tone_categories']
+
+  for(i = 0; i < tone_categories.length; i++){
+    tones = tone_categories[i]['tones']
+    category_id = tone_categories[i]['category_id']
+
+    for(j = 0; j < tones.length; j++){
+      tone_id = tones[j]['tone_id']
+      score = tones[j]['score'];
+
+      dictionary[tone_id] = score
+    }
+  }
+
+  return dictionary
+}
+
+function compute_diff(profile, compare){
+  var result = {}
+
+  for(key in profile){
+  	result[key] = difference(profile[key], compare[key])
+  }
+
+  return result
+}
+
+function difference(x,y){
+  if( x + y == 0) return 0
+  else return (Math.abs(x - y) / ((x + y) / 2)) * 100
+}
+
+function clone(obj){
+   return JSON.parse(JSON.stringify(obj))
+}
+
+function average_scores(list){
+  var result = []
+
+  for(i = 0; i < list.length; i++){
+    tmp = 0
+    count = 0
+
+    for(key in list[i]){
+      count++
+
+      tmp += list[i][key]
+    }
+
+    result[i] = tmp / count
+  }
+
+  return result
 }
