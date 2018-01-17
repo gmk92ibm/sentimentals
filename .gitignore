@@ -1,3 +1,4 @@
 /node_modules/
 vcap-local.json
 /.vscode/
+.DS_Store

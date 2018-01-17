@@ -1,7 +1,7 @@
 {
-  "name": "get-started-node",
+  "name": "sentimentals",
   "main": "server.js",
-  "description": "An introduction to developing Node.js apps on the Bluemix platform",
+  "description": "Sentiment Evaluation of Marketing Campaigns",
   "version": "0.1.1",
   "private": false,
   "engines": {
@@ -12,7 +12,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/IBM-Bluemix/get-started-node"
+    "url": "https://github.com/gmk92ibm/sentimentals"
   },
   "dependencies": {
     "body-parser": "^1.17.x",
