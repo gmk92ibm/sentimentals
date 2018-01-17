@@ -1,33 +1,33 @@
-var cfenv = require("cfenv");
-var reduce = require('lodash/reduce');
-var config = require('./config');
+var cfenv = require("cfenv")
+var reduce = require('lodash/reduce')
+var config = require('./config')
 
-var tone_analyzer;
+var tone_analyzer
 
 if (config.services['tone_analyzer']) {
-  console.log('found service tone_analyzer');
-  var ToneAnalyzerV3 = require('watson-developer-cloud/tone-analyzer/v3');
-  var credentials = config.services['tone_analyzer'][0].credentials;
-  credentials['version_date'] = '2016-05-19';
+  console.log('found service tone_analyzer')
+  var ToneAnalyzerV3 = require('watson-developer-cloud/tone-analyzer/v3')
+  var credentials = config.services['tone_analyzer'][0].credentials
+  credentials['version_date'] = '2016-05-19'
   tone_analyzer = new ToneAnalyzerV3(credentials)
 }
 
 //Combine (sum) each of the initial profile docs' analysis results
 function combineResultValues(combined_analysis, new_analysis) {
   if (!combined_analysis || combined_analysis === new_analysis) {
-      return new_analysis;
+      return new_analysis
   }
-  var doc_doc = combined_analysis.document_tone;
+  var doc_doc = combined_analysis.document_tone
 
   for (i in doc_doc.tone_categories) {
-    var doc_cat = doc_doc.tone_categories[i];
+    var doc_cat = doc_doc.tone_categories[i]
     for (j in doc_cat.tones) {
-      var doc_tone = doc_cat.tones[j];
-      var new_doc = new_analysis.document_tone;
+      var doc_tone = doc_cat.tones[j]
+      var new_doc = new_analysis.document_tone
       for (k in new_doc.tone_categories) {
-        var new_cat = new_doc.tone_categories[k];
+        var new_cat = new_doc.tone_categories[k]
         for (l in new_cat.tones) {
-          var new_tone = new_cat.tones[l];
+          var new_tone = new_cat.tones[l]
           if (doc_tone.tone_id == new_tone.tone_id) {
             doc_tone.score += new_tone.score
           }
@@ -36,27 +36,27 @@ function combineResultValues(combined_analysis, new_analysis) {
     }
   }
 
-  var new_sec = new_analysis.sentences_tone;
+  var new_sec = new_analysis.sentences_tone
   if (combined_analysis.sentences_tone == null) {
-    combined_analysis.sentences_tone = {};
+    combined_analysis.sentences_tone = {}
   }
   for (i in new_sec) {
-    var new_tone = new_sec[i];
+    var new_tone = new_sec[i]
     combined_analysis.sentences_tone.push(new_tone)
   }
-  return combined_analysis;
+  return combined_analysis
 }
 
 //Average all of the initial profile docs' analysis results
 function averageScores(combined_analysis, count) {
-  var doc_doc = combined_analysis.document_tone;
+  var doc_doc = combined_analysis.document_tone
 
   for (i in doc_doc.tone_categories) {
-    var doc_cat = doc_doc.tone_categories[i];
+    var doc_cat = doc_doc.tone_categories[i]
     for (j in doc_cat.tones) {
-      var doc_tone = doc_cat.tones[j];
+      var doc_tone = doc_cat.tones[j]
 
-      doc_tone.score = doc_tone.score / count;
+      doc_tone.score = doc_tone.score / count
     }
   }
   return  combined_analysis
@@ -74,15 +74,15 @@ function analyzeTone(params) {
 
 module.exports = {
   analyze: function (request_body, response) {
-    var profile_doc_promises = request_body.profile_docs.map(doc => analyzeTone(doc));
-      var new_doc_promise = analyzeTone(request_body.new_doc);
+    var profile_doc_promises = request_body.profile_docs.map(doc => analyzeTone(doc))
+      var new_doc_promise = analyzeTone(request_body.new_doc)
 
       Promise.all([...profile_doc_promises, new_doc_promise]).then(values => {
         // The new doc values will always be the last result
-        var new_analysis = values.pop();
-        var profile_doc_values = values;
-        var combinedResponse = reduce(profile_doc_values, (result, value) => combineResultValues(result, value));
-        var profile_analysis = averageScores(combinedResponse, request_body.profile_docs.length);
+        var new_analysis = values.pop()
+        var profile_doc_values = values
+        var combinedResponse = reduce(profile_doc_values, (result, value) => combineResultValues(result, value))
+        var profile_analysis = averageScores(combinedResponse, request_body.profile_docs.length)
 
         profile = parse_response(profile_analysis)
 
@@ -95,13 +95,13 @@ module.exports = {
 
         summary.sentences = sentence_analysis
         document['tones'] = compute_diff(profile,compare)
-        document['average'] = average_score(document['tones']);
-        summary.document = document;
+        document['average'] = average_score(document['tones'])
+        summary.document = document
 
-        response.send(summary);
+        response.send(summary)
       }).catch((error) => {
-        response.send(error);
-      });
+        response.send(error)
+      })
   }
 }
 
@@ -124,12 +124,12 @@ function analyze_sentences(profile, response){
 
       for(k = 0; k < tones.length; k++){
         tone_id = tones[k]['tone_id']
-        score = tones[k]['score'];
+        score = tones[k]['score']
 
         tmp[tone_id] = score
       }
 
-      var sentence = sentences_tone[i];
+      var sentence = sentences_tone[i]
       sentence['tones'] = compute_diff(profile,tmp)
       sentence['average'] = average_score(sentence['tones']);
       delete sentence['tone_categories']
@@ -137,7 +137,7 @@ function analyze_sentences(profile, response){
     }
   }
 
-  return sentences;
+  return sentences
 }
 
 function parse_response(response){
@@ -152,7 +152,7 @@ function parse_response(response){
 
     for(j = 0; j < tones.length; j++){
       tone_id = tones[j]['tone_id']
-      score = tones[j]['score'];
+      score = tones[j]['score']
 
       dictionary[tone_id] = score
     }
@@ -173,15 +173,15 @@ function compute_diff(profile, compare){
 
 function difference(x,y){
   if( x + y == 0) return 0
-  else return (Math.abs(x - y) / ((x + y) / 2)) * 100
+  else return ((x - y) / ((x + y) / 2)) * 100
 }
 
 function average_score(tones){
   var result = 0
 
   for(key in tones){
-    result += tones[key]
+    result += Math.abs(tones[key])
   }
 
-  return result / Object.keys(tones).length;
+  return result / Object.keys(tones).length
 }
