@@ -39,45 +39,6 @@ app.use(bodyParser.json())
  *     "tone_categories": ["emotion_tone", "languages_tone", "social_tone"]
  * }
  *
- * ####### RESPONSE #######
- *
- * All values in response are represented as a difference. This is calculated by profile score - new score.
- * A positive difference means the tone/emotion is more prominently expressed in the PROFILE doc(s).
- *      ex: A difference value of 0.9 for anger means the profile doc is much more angry than the new doc.
- *          A difference value of 0.1 for anger means the profile doc is slightly more angry.
- * A negative difference means the tone/emtions is more prominently expressed in the NEW doc.
- *      ex: A difference value of -0.9 for anger means the new doc is much more angry than the profile doc.
- *
- * raw_comparison - Same structure as api response but showing difference values.
- * ordered_comparison - Less nested structure of values in descending order by highest difference (absolute value)
- *
- * {
- *  "raw_comparison":[
- *      {
- *          "tones":[
- *              {
- *                  "tone_id":   "anger",
- *                  "tone_name": "Anger",
- *                  "difference": 0.534822
- *              },
- *              ......... etc
- *          ]
- *      }
- *  ],
- *  "ordered_comparison": [
- *      {
- *          "category_id": "emotion_tone",
- *          "tone_id":     "joy",
- *          "difference":  -0.898867
- *      },
- *      {
- *          "category_id": "emotion_tone",
- *          "tone_id":     "disgust",
- *          "difference":  0.661432
- *      },
- *      ......... etc
- *  ]
- * }
  * @return JSON analysis of text
  */
 app.post("/api/analyze", function(request, response) {

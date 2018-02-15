@@ -97,6 +97,8 @@ module.exports = {
         document['tones'] = compute_diff(profile,compare)
         document['average'] = average_score(document['tones'])
         summary.document = document
+        // summary.profile = profile
+        // summary.new = compare
 
         response.send(summary)
       }).catch((error) => {
@@ -111,7 +113,7 @@ function analyze_sentences(profile, response){
 
   sentences_tone = response['sentences_tone']
 
-  if(!sentences_tone) return {}
+  if(!sentences_tone) return []
 
   for(i = 0; i < sentences_tone.length; i++){
     tone_categories = sentences_tone[i]['tone_categories']
@@ -171,9 +173,16 @@ function compute_diff(profile, compare){
   return result
 }
 
-function difference(x,y){
-  if( x + y == 0) return 0
-  else return ((x - y) / ((x + y) / 2)) * 100
+//percent difference function
+// function difference(x,y){
+//   if( x + y == 0) return 0
+//   else return ((x - y) / ((x + y) / 2)) * 100
+// }
+
+//percent change function
+function difference(x,y) {
+    if (x == 0) return 0
+    return ((x - y) / x) * 100;
 }
 
 function average_score(tones){
