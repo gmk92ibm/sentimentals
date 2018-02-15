@@ -79,16 +79,17 @@ module.exports = {
 
       Promise.all([...profile_doc_promises, new_doc_promise]).then(values => {
         // The new doc values will always be the last result
-        var new_analysis = values.pop()
-        var profile_doc_values = values
+        var new_analysis = remove_unused_categories([values.pop()], request_body.tone_categories)
+        var new_analysis = new_analysis.pop()
+        var profile_doc_values = remove_unused_categories(values, request_body.tone_categories)
         var combinedResponse = reduce(profile_doc_values, (result, value) => combineResultValues(result, value))
         var profile_analysis = averageScores(combinedResponse, request_body.profile_docs.length)
 
-        profile = parse_response(profile_analysis)
+        var profile = parse_response(profile_analysis)
 
-        compare = parse_response(new_analysis)
+        var compare = parse_response(new_analysis)
 
-        sentence_analysis = analyze_sentences(profile,new_analysis) // have to use new_analysis as it still has sentences
+        var sentence_analysis = analyze_sentences(profile, new_analysis) // have to use new_analysis as it still has sentences
 
         var summary = {}
         var document = {}
@@ -107,26 +108,51 @@ module.exports = {
   }
 }
 
+function remove_unused_categories(analysis_results, categories) {
+    var reduced_results = analysis_results
+    for (i = analysis_results.length - 1; i >= 0; i--) {
+        var current_result = reduced_results[i]
+        for (j = current_result.document_tone.tone_categories.length - 1; j >= 0; j--) {
+            var current_category = current_result.document_tone.tone_categories[j]
+            if (categories.indexOf(current_category.category_id) < 0) {
+                reduced_results[i].document_tone.tone_categories.splice(j, 1)
+            } 
+        }
+        if (current_result.sentences_tone) {
+            for (k = current_result.sentences_tone.length - 1; k >= 0; k--) {
+                var current_sentence = current_result.sentences_tone[k]
+                for (m = current_sentence.tone_categories.length - 1; m >= 0; m--) {
+                    var current_category = current_sentence.tone_categories[m]
+                    if (categories.indexOf(current_category.category_id) < 0) {
+                        reduced_results[i].sentences_tone[k].tone_categories.splice(m, 1)
+                    } 
+                }
+            }
+        }
+    }
+    return reduced_results
+}
+
 
 function analyze_sentences(profile, response){
   var sentences = []
 
-  sentences_tone = response['sentences_tone']
+  var sentences_tone = response['sentences_tone']
 
   if(!sentences_tone) return []
 
   for(i = 0; i < sentences_tone.length; i++){
-    tone_categories = sentences_tone[i]['tone_categories']
+    var tone_categories = sentences_tone[i]['tone_categories']
 
-    tmp = {}
+    var tmp = {}
 
     for(j = 0; j < tone_categories.length; j++){
-      tones = tone_categories[j]['tones']
-      category_id = tone_categories[j]['category_id']
+      var tones = tone_categories[j]['tones']
+      var category_id = tone_categories[j]['category_id']
 
       for(k = 0; k < tones.length; k++){
-        tone_id = tones[k]['tone_id']
-        score = tones[k]['score']
+        var tone_id = tones[k]['tone_id']
+        var score = tones[k]['score']
 
         tmp[tone_id] = score
       }
@@ -145,16 +171,16 @@ function analyze_sentences(profile, response){
 function parse_response(response){
   var dictionary = {}
 
-  document_tone = response['document_tone']
-  tone_categories = document_tone['tone_categories']
+  var document_tone = response.document_tone
+  var tone_categories = document_tone['tone_categories']
 
   for(i = 0; i < tone_categories.length; i++){
-    tones = tone_categories[i]['tones']
-    category_id = tone_categories[i]['category_id']
+    var tones = tone_categories[i]['tones']
+    var category_id = tone_categories[i]['category_id']
 
     for(j = 0; j < tones.length; j++){
-      tone_id = tones[j]['tone_id']
-      score = tones[j]['score']
+      var tone_id = tones[j]['tone_id']
+      var score = tones[j]['score']
 
       dictionary[tone_id] = score
     }
